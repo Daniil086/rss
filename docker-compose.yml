@@ -1,0 +1,18 @@
+services:
+  poc-rss-loader:
+    build: .
+    container_name: poc-rss-loader
+    restart: unless-stopped
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+      - ./logs:/app/logs
+      - ./poc_downloads:/app/poc_downloads
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["--interval", "300"]  # 5 минут по умолчанию
+    networks:
+      - docker_default
+
+networks:
+  docker_default:
+    external: true

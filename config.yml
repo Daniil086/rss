@@ -1,0 +1,128 @@
+# Конфигурация PoC RSS Loader для OpenCTI (Linux)
+
+# Настройки OpenCTI
+opencti:
+  url: "http://opencti:8080"   # базовый URL платформы OpenCTI (используем Docker алиас)
+  token: "648cbcbf-91ab-433f-a062-107eccb9292b"                     # API-токен пользователя/платформы
+  ssl_verify: false                       # true для продакшна с валидными сертификатами
+
+# Настройки RSS
+rss:
+  url: "https://poc-in-github.motikan2010.net/rss/"
+
+# Настройки мониторинга
+monitoring:
+  check_interval: 300                     # секунды (5 минут)
+  max_retries: 3
+  retry_delay: 60                         # секунды
+  bootstrap_count: 10                     # Сколько последних элементов обработать при старте
+
+# Настройки логирования
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+  file: "poc_loader.log"
+  rotation_hours: 24
+
+# Настройки файлов
+files:
+  work_dir: "poc_downloads"
+  max_file_size: 52428800                 # 50MB в байтах
+  min_file_size: 10                       # байт
+
+# Настройки NVD API
+nvd_api:
+  max_retries: 3                          # максимальное количество повторных попыток
+  base_delay: 2                           # базовая задержка в секундах (экспоненциально увеличивается)
+  request_delay: 5                         # задержка между запросами в секундах (для соблюдения rate limit)
+
+# Расширения файлов для исключения (черный список)
+excluded_extensions:
+  # Медиа файлы
+  - ".png"
+  - ".jpg"
+  - ".jpeg"
+  - ".gif"
+  - ".bmp"
+  - ".svg"
+  - ".ico"
+  - ".webp"
+  - ".tiff"
+  - ".mp4"
+  - ".avi"
+  - ".mov"
+  - ".wmv"
+  - ".flv"
+  - ".mkv"
+  - ".webm"
+  - ".mp3"
+  - ".wav"
+  - ".flac"
+  - ".aac"
+  - ".ogg"
+  - ".wma"
+
+  # Документы
+  - ".pdf"
+  - ".doc"
+  - ".docx"
+  - ".xls"
+  - ".xlsx"
+  - ".ppt"
+  - ".pptx"
+  - ".odt"
+  - ".ods"
+  - ".odp"
+  - ".rtf"
+  - ".csv"
+  - ".yml"
+  - ".yaml"
+  - ".xml"
+
+  # Системные файлы
+  - ".log"
+  - ".tmp"
+  - ".bak"
+  - ".swp"
+  - ".swo"
+  - ".orig"
+  - ".rej"
+  - ".patch"
+
+  # Документация
+  - ".md"
+  - ".txt"
+  - ".rst"
+  - ".adoc"
+  - ".html"
+  - ".htm"
+  - ".css"
+  - ".scss"
+  - ".less"
+
+# Дополнительные правила черного списка (имена файлов и директории)
+excluded_file_name_patterns:
+  - "readme"
+  - "license"
+  - "copying"
+  - "changelog"
+  - "changes"
+  - "contributing"
+  - "code_of_conduct"
+  - "security"
+  - "notice"
+  - "authors"
+  - "maintainers"
+  - "support"
+  - "funding"
+  - "pull_request_template"
+  - "issue_template"
+
+excluded_dir_names:
+  - ".git"
+  - ".github"
+  - "node_modules"
+  - "__pycache__"
+  - "dist"
+  - "build"
+  - "vendor"
