@@ -202,11 +202,100 @@ def save_cache(cache):
         logger.error(f"[CACHE] Error saving cache: {e}")
         return False
 
-def extract_cve_id(title):
-    """Извлекает CVE ID из заголовка"""
+def extract_cve_id(entry):
+    """Извлекает CVE ID из всех доступных полей RSS-записи"""
+    # Улучшенное регулярное выражение для поиска CVE-ID
+    # Поддерживает различные форматы: CVE-2021-44228, CVE-2022-123, CVE-2023-12345
     cve_pattern = r'CVE-\d{4}-\d{4,7}'
-    match = re.search(cve_pattern, title, re.IGNORECASE)
-    return match.group(0) if match else None
+    
+    # Список полей для поиска CVE-ID в порядке приоритета
+    search_fields = [
+        'title',           # Заголовок (высший приоритет)
+        'description',     # Описание
+        'summary',         # Краткое описание
+        'content',         # Содержимое
+        'subtitle',        # Подзаголовок
+        'link',            # URL (может содержать CVE-ID)
+        'author',          # Автор (может содержать CVE-ID)
+        'category',        # Категория
+        'tags',            # Теги
+        'dc_subject',      # Dublin Core subject
+        'dc_description',  # Dublin Core description
+        'dc_title',        # Dublin Core title
+        'media_description', # Media description
+        'media_title',     # Media title
+        'media_keywords'   # Media keywords
+    ]
+    
+    # Логируем доступные поля для отладки (только на уровне DEBUG)
+    if logger.isEnabledFor(logging.DEBUG):
+        available_fields = []
+        for field_name in search_fields:
+            field_value = getattr(entry, field_name, None)
+            if field_value is not None:
+                if isinstance(field_value, str) and len(field_value) > 0:
+                    available_fields.append(f"{field_name}: '{field_value[:100]}{'...' if len(field_value) > 100 else ''}'")
+                elif isinstance(field_value, list) and len(field_value) > 0:
+                    available_fields.append(f"{field_name}: {field_value}")
+        if available_fields:
+            logger.debug(f"[DEBUG] Available RSS fields: {', '.join(available_fields)}")
+    
+    # Сначала ищем в заголовке (высший приоритет)
+    title = getattr(entry, 'title', '')
+    if title:
+        match = re.search(cve_pattern, title, re.IGNORECASE)
+        if match:
+            logger.debug(f"[DEBUG] CVE-ID found in title: {match.group(0)}")
+            return match.group(0)
+    
+    # Затем ищем в других полях
+    for field_name in search_fields[1:]:  # Пропускаем title, уже проверили
+        field_value = getattr(entry, field_name, '')
+        if field_value:
+            # Обрабатываем разные типы полей
+            if isinstance(field_value, str):
+                match = re.search(cve_pattern, field_value, re.IGNORECASE)
+                if match:
+                    logger.debug(f"[DEBUG] CVE-ID found in {field_name}: {match.group(0)}")
+                    return match.group(0)
+            elif isinstance(field_value, list):
+                # Для полей типа tags, category
+                for item in field_value:
+                    if isinstance(item, str):
+                        match = re.search(cve_pattern, item, re.IGNORECASE)
+                        if match:
+                            logger.debug(f"[DEBUG] CVE-ID found in {field_name} list item: {match.group(0)}")
+                            return match.group(0)
+    
+    # Если CVE-ID не найден ни в одном поле
+    logger.debug(f"[DEBUG] No CVE-ID found in any RSS field for entry: {getattr(entry, 'title', 'Unknown')}")
+    return None
+
+def extract_cve_id_from_url(url):
+    """Извлекает CVE ID из URL репозитория"""
+    cve_pattern = r'CVE-\d{4}-\d{4,7}'
+    
+    # Сначала ищем CVE-ID в полном URL
+    match = re.search(cve_pattern, url, re.IGNORECASE)
+    if match:
+        logger.debug(f"[DEBUG] CVE-ID found in full URL: {match.group(0)}")
+        return match.group(0)
+    
+    # Если не найден в URL, пробуем извлечь название репозитория и искать там
+    try:
+        # Извлекаем название репозитория из GitHub URL
+        if "github.com" in url:
+            # Формат: https://github.com/owner/repo-name
+            repo_name = url.split("/")[-1]
+            if repo_name:
+                match = re.search(cve_pattern, repo_name, re.IGNORECASE)
+                if match:
+                    logger.debug(f"[DEBUG] CVE-ID found in repository name: {match.group(0)}")
+                    return match.group(0)
+    except Exception as e:
+        logger.debug(f"[DEBUG] Error extracting repository name from URL: {e}")
+    
+    return None
 
 def check_git_installed():
     """Проверяет, установлен ли git в системе"""
@@ -1671,6 +1760,23 @@ def process_poc_item(entry, cache):
         if not original_description:
             original_description = title  # Используем заголовок, если описание пустое
         
+        # Логируем доступные поля RSS для отладки
+        if logger.isEnabledFor(logging.DEBUG):
+            available_fields = []
+            search_fields = [
+                'title', 'description', 'summary', 'content', 'subtitle', 'link', 'author', 'category', 'tags',
+                'dc_subject', 'dc_description', 'dc_title', 'media_description', 'media_title', 'media_keywords'
+            ]
+            for field_name in search_fields:
+                field_value = getattr(entry, field_name, None)
+                if field_value is not None:
+                    if isinstance(field_value, str) and len(field_value) > 0:
+                        available_fields.append(f"{field_name}: '{field_value[:100]}{'...' if len(field_value) > 100 else ''}'")
+                    elif isinstance(field_value, list) and len(field_value) > 0:
+                        available_fields.append(f"{field_name}: {field_value}")
+            if available_fields:
+                logger.debug(f"[DEBUG] RSS entry fields for '{title[:50]}...': {', '.join(available_fields)}")
+        
         if not poc_url:
             logger.warning(f"[WARNING] No URL found for entry: {title}")
             return False
@@ -1696,10 +1802,17 @@ def process_poc_item(entry, cache):
                 logger.info(f"[SKIP] Skipping processed item: {title} ({files_count} files processed)")
             return None
             
-        # Извлечение CVE ID
-        cve_id = extract_cve_id(title)
+        # Извлечение CVE ID из всех доступных полей RSS
+        cve_id = extract_cve_id(entry)
+        
+        # Если CVE-ID не найден в RSS полях, попробуем извлечь из URL репозитория
+        if not cve_id and poc_url:
+            cve_id = extract_cve_id_from_url(poc_url)
+            if cve_id:
+                logger.info(f"[INFO] CVE-ID extracted from repository URL: {cve_id}")
+        
         if not cve_id:
-            logger.warning(f"[WARNING] No CVE ID found in title: {title}")
+            logger.warning(f"[WARNING] No CVE ID found in any RSS field or URL: {title}")
             return False
         
         logger.info(f"[PROCESSING] Processing {cve_id}: {title}")
